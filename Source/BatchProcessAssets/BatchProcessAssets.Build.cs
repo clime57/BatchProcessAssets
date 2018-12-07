@@ -4,7 +4,7 @@ using UnrealBuildTool;
 
 public class BatchProcessAssets : ModuleRules
 {
-	public BatchProcessAssets(TargetInfo Target)
+	public BatchProcessAssets(ReadOnlyTargetRules Target) : base(Target)
 	{
 		
 		PublicIncludePaths.AddRange(
@@ -54,7 +54,8 @@ public class BatchProcessAssets : ModuleRules
 				"UnrealEd",
 				"LevelEditor",
                 "RHI",
-                "AssetRegistry"
+                "AssetRegistry",
+                "Analytics",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
