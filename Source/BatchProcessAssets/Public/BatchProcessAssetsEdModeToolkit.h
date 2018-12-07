@@ -7,18 +7,29 @@
 
 class FBatchProcessAssetsEdModeToolkit : public FModeToolkit
 {
+
 public:
+	typedef TSharedPtr<FString> FComboItemType;
 
 	FBatchProcessAssetsEdModeToolkit();
 
+	static void OnSelectionChanged(FComboItemType NewValue, ESelectInfo::Type);
+	static TSharedRef<SWidget> MakeWidgetForOption(FComboItemType InOption);
+	static FText GetCurrentItemLabel();
+	static void OnIsModifyOrigenalChanged(ECheckBoxState CheckBoxState);
 	/** IToolkit interface */
 	virtual FName GetToolkitFName() const override;
 	virtual FText GetBaseToolkitName() const override;
 	virtual class FEdMode* GetEditorMode() const override;
 	virtual TSharedPtr<class SWidget> GetInlineContent() const override { return ToolkitWidget; }
 	static void ReImport(float scale);
-	static void ReImportSelected(float scale);
 private:
-
 	TSharedPtr<SWidget> ToolkitWidget;
+	TArray< FComboItemType > Options;
+	static FComboItemType CurrentItem;
+public:
+	static int32 MaxTexSize;
+	static bool bIsNotReallyModifyOriginalTex;
+
+
 };

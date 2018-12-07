@@ -19,10 +19,12 @@ class UScaleTextureFactory : public UTextureFactory
 	UPROPERTY()
 	class UTexture* pOriginalTex;
 private:
-	float TexScale;
+	//float TexScale;
+	int32 iMaxTexSize;
+	bool bIsNotReallyModifyOriginalTex;
 public:	
-	void Import(float scale);
-	void ReImportSelected(float scale, TArray<FAssetData>& SelectedAssets);
+	void Import(float scale, int32 MaxTexSize, bool IsNotReallyModifyOriginalTex);
+	void ReImportSelected(float scale, TArray<FAssetData>& SelectedAssets, int32 MaxTexSize, bool IsNotReallyModifyOriginalTex);
 	UObject* ImportObject1(UClass* InClass, UObject* InOuter, FName InName, EObjectFlags InFlags, const TCHAR* Parms, bool& OutCanceled);
 	UObject* FactoryCreateFile1(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, const TCHAR* Parms, bool& bOutOperationCanceled);
 	UObject* FactoryCreateBinary1
@@ -38,12 +40,15 @@ public:
 		ETextureSourceFormat TextureFormat,
 		UClass* Class,
 		UObject* InParent,
-		FName Name);
+		FName Name, 
+		const FIntPoint& FinalSize);
 	void OnNewImportRecord(UClass* AssetType, const FString& FileExtension, bool bSucceeded, bool bWasCancelled, const FDateTime& StartTime);
-	TArray<uint8>*  GetReImportData(UTexture2D* Texture, TArray<uint8>* RawDataOut);
+	void GetFinalSize(const FIntPoint& oldSize, FIntPoint& newSize, int32 MaxTextureSize);
+	TArray<uint8>*  GetReImportData(UTexture2D* Texture, TArray<uint8>* RawDataOut, const FIntPoint& FinalSize);
 	//~ Begin UTextureFactory Interface
 	virtual UTexture2D* CreateTexture2D(UObject* InParent, FName Name, EObjectFlags Flags) override;
 	virtual UTextureCube* CreateTextureCube(UObject* InParent, FName Name, EObjectFlags Flags) override;
 	//~ End UTextureFactory Interface
 	UObject* ReImport(FAssetData& AssetData);
+	void ImportADL(TArray<FAssetData>& SelectedAssets);
 };

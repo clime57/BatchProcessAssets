@@ -8,7 +8,7 @@
 void FBatchProcessAssetsModule::StartupModule()
 {
 	// This code will execute after your module is loaded into memory; the exact timing is specified in the .uplugin file per-module
-	FEditorModeRegistry::Get().RegisterMode<FBatchProcessAssetsEdMode>(FBatchProcessAssetsEdMode::EM_BatchProcessAssetsEdModeId, LOCTEXT("BatchProcessAssetsEdModeName", "BatchProcessAssetsEdMode"), FSlateIcon(), true);
+	FEditorModeRegistry::Get().RegisterMode<FBatchProcessAssetsEdMode>(FBatchProcessAssetsEdMode::EM_BatchProcessAssetsEdModeId, LOCTEXT("BatchProcessAssetsEdModeName", "BatchProcessAssetsTools"), FSlateIcon(), true);
 }
 
 void FBatchProcessAssetsModule::ShutdownModule()

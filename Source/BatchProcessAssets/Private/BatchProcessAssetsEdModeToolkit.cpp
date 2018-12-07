@@ -6,54 +6,45 @@
 
 #include "ContentBrowserModule.h"
 #include "ScaleTextureFactory.h"
-
+#include "IContentBrowserSingleton.h"
 
 #define LOCTEXT_NAMESPACE "FBatchProcessAssetsEdModeToolkit"
 
+int32 FBatchProcessAssetsEdModeToolkit::MaxTexSize = 32;
+bool FBatchProcessAssetsEdModeToolkit::bIsNotReallyModifyOriginalTex = false;
+FBatchProcessAssetsEdModeToolkit::FComboItemType FBatchProcessAssetsEdModeToolkit::CurrentItem;
 FBatchProcessAssetsEdModeToolkit::FBatchProcessAssetsEdModeToolkit()
 {
 	struct Locals
 	{
 		static bool IsWidgetEnabled()
 		{
-			//return GEditor->GetSelectedActors()->Num() != 0;
 			return true;
 		}
 
-		static FReply OnButtonClick(float scale)
+		static FReply OnButtonClick()
 		{
-			//USelection* SelectedActors = GEditor->GetSelectedActors();
-
-			//// Let editor know that we're about to do something that we want to undo/redo
-			//GEditor->BeginTransaction(LOCTEXT("MoveActorsTransactionName", "MoveActors"));
-
-			//// For each selected actor
-			//for (FSelectionIterator Iter(*SelectedActors); Iter; ++Iter)
-			//{
-			//	if (AActor* LevelActor = Cast<AActor>(*Iter))
-			//	{
-			//		// Register actor in opened transaction (undo/redo)
-			//		LevelActor->Modify();
-			//		// Move actor to given location
-			//		LevelActor->TeleportTo(LevelActor->GetActorLocation() + InOffset, FRotator(0, 0, 0));
-			//	}
-			//}
-
-			//// We're done moving actors so close transaction
-			//GEditor->EndTransaction();
-			ReImport(scale);
+			ReImport(1);
 			return FReply::Handled();
 		}
-
-		static TSharedRef<SWidget> MakeButton(FText InLabel,float scale)
+		
+		static TSharedRef<SWidget> MakeButton(FText InLabel)
 		{
 			return SNew(SButton)
 				.Text(InLabel)
-				.OnClicked_Static(&Locals::OnButtonClick, scale);
+				.OnClicked_Static(&Locals::OnButtonClick);
 		}
 	};
 
 	const float Factor = 256.0f;
+
+	Options.Add(MakeShareable(new FString("32")));
+	Options.Add(MakeShareable(new FString("64")));
+	Options.Add(MakeShareable(new FString("128")));
+	Options.Add(MakeShareable(new FString("256")));
+	Options.Add(MakeShareable(new FString("512")));
+	CurrentItem = Options[0];
+
 
 	SAssignNew(ToolkitWidget, SBorder)
 		.HAlign(HAlign_Center)
@@ -68,62 +59,85 @@ FBatchProcessAssetsEdModeToolkit::FBatchProcessAssetsEdModeToolkit()
 			[
 				SNew(STextBlock)
 				.AutoWrapText(true)
-				.Text(LOCTEXT("HelperLabel", "..."))
+				.Text(LOCTEXT("ScaleTextureDesc", "Select the texture to be scaled in the Content Browser, then click the ScaleTextures button, or select nothing to zoom all the textures."))
+			]
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.HAlign(HAlign_Center)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.HAlign(HAlign_Left)
+				.VAlign(VAlign_Center)
+				[
+					SNew(STextBlock)
+					.Text(LOCTEXT("SelectMaxTextureSize", "SelectMaxTextureSize"))
+				]
+				+ SHorizontalBox::Slot()
+				.HAlign(HAlign_Right)
+				.VAlign(VAlign_Center)
+				.AutoWidth()
+				.Padding(5)
+				[
+					SNew(SComboBox<FComboItemType>)
+					.OptionsSource(&Options)
+					.OnSelectionChanged_Static(&FBatchProcessAssetsEdModeToolkit::OnSelectionChanged)
+					.OnGenerateWidget_Static(&FBatchProcessAssetsEdModeToolkit::MakeWidgetForOption)
+					.InitiallySelectedItem(CurrentItem)
+					[
+						SNew(STextBlock)
+						.Text_Static(&FBatchProcessAssetsEdModeToolkit::GetCurrentItemLabel)
+					]
+				]
 			]
 			+ SVerticalBox::Slot()
 				.HAlign(HAlign_Center)
 				.AutoHeight()
+				.Padding(10)
+			[
+				SNew(SCheckBox)
+				.OnCheckStateChanged_Static(&FBatchProcessAssetsEdModeToolkit::OnIsModifyOrigenalChanged)
 				[
-					Locals::MakeButton(LOCTEXT("ScaleTexturesButtonLabel1", "ScaleTextures 1/2"),1.0/2)
+					SNew(STextBlock)
+					.Text(LOCTEXT("DoNotModifyOrigenalAssets", "DoNotModifyOrigenalAssets"))
+					.ToolTipText(LOCTEXT("DoNotModifyOrigenalAssetsToolTipText","Checked Steate means only modifying Maximum Texture Size Property of the Texture"))
 				]
+			]
 			+ SVerticalBox::Slot()
 				.HAlign(HAlign_Center)
 				.AutoHeight()
+				.Padding(10)
 				[
-					Locals::MakeButton(LOCTEXT("ScaleTexturesButtonLabel2", "ScaleTextures 1/4"),1.0/4)
+					Locals::MakeButton(LOCTEXT("ScaleTexturesButtonLabel1", "ScaleTextures"))
 				]
-			+ SVerticalBox::Slot()
-				.HAlign(HAlign_Center)
-				.AutoHeight()
-				[
-					Locals::MakeButton(LOCTEXT("ScaleTexturesButtonLabel3", "ScaleTextures 1/8"),1.0/8)
-				] 
-			+ SVerticalBox::Slot()
-				.HAlign(HAlign_Center)
-				.AutoHeight()
-				[
-					Locals::MakeButton(LOCTEXT("ScaleTexturesButtonLabel4", "ScaleTextures 1/16"),1.0/16)
-				]
-			+ SVerticalBox::Slot()
-				.HAlign(HAlign_Center)
-				.AutoHeight()
-				[
-					Locals::MakeButton(LOCTEXT("ScaleTexturesButtonLabel5", "ScaleTextures 1/32"),1.0/32)
-				]
-			//+ SVerticalBox::Slot()
-			//	.HAlign(HAlign_Center)
-			//	.AutoHeight()
-			//	[
-			//		SNew(SHorizontalBox)
-			//		+ SHorizontalBox::Slot()
-			//		.AutoWidth()
-			//		[
-			//			Locals::MakeButton(LOCTEXT("LeftButtonLabel", "Left"), FVector(0, -Factor, 0))
-			//		]
-			//		+ SHorizontalBox::Slot()
-			//			.AutoWidth()
-			//			[
-			//				Locals::MakeButton(LOCTEXT("RightButtonLabel", "Right"), FVector(0, Factor, 0))
-			//			]
-			//	]
-			//+ SVerticalBox::Slot()
-			//	.HAlign(HAlign_Center)
-			//	.AutoHeight()
-			//	[
-			//		Locals::MakeButton(LOCTEXT("DownButtonLabel", "Down"), FVector(0, 0, -Factor))
-			//	]
-
 		];
+}
+
+void FBatchProcessAssetsEdModeToolkit::OnSelectionChanged(FComboItemType NewValue, ESelectInfo::Type)
+{
+	CurrentItem = NewValue;
+	MaxTexSize = FCString::Atoi(**(CurrentItem.Get()));
+}
+
+TSharedRef<SWidget> FBatchProcessAssetsEdModeToolkit::MakeWidgetForOption(FComboItemType InOption)
+{
+	return SNew(STextBlock).Text(FText::FromString(*InOption));
+}
+
+FText FBatchProcessAssetsEdModeToolkit::GetCurrentItemLabel()
+{
+	if (CurrentItem.IsValid())
+	{
+		return FText::FromString(*CurrentItem);
+	}
+
+	return LOCTEXT("InvalidComboEntryText", "<<Invalid option>>");
+}
+
+void FBatchProcessAssetsEdModeToolkit::OnIsModifyOrigenalChanged(ECheckBoxState CheckBoxState)
+{
+	bIsNotReallyModifyOriginalTex = CheckBoxState == ECheckBoxState::Checked ? true : false;
 }
 
 FName FBatchProcessAssetsEdModeToolkit::GetToolkitFName() const
@@ -144,39 +158,29 @@ class FEdMode* FBatchProcessAssetsEdModeToolkit::GetEditorMode() const
 
 void FBatchProcessAssetsEdModeToolkit::ReImport(float scale)
 {
-	auto TextureFact = NewObject<UScaleTextureFactory>();
-	TextureFact->Import(scale);
-}
-
-void FBatchProcessAssetsEdModeToolkit::ReImportSelected(float scale)
-{
-	//TArray<UObject*> ObjectsToExport;
-	//const bool SkipRedirectors = false;
-	//GetSelectedAssets(ObjectsToExport, SkipRedirectors);
-
-	//if (ObjectsToExport.Num() > 0)
-	//{
-	//	ObjectTools::ExportObjects(ObjectsToExport, /*bPromptForEachFileName=*/true);
-	//}
 	TArray<FAssetData> SelectedAssets;
 	IContentBrowserSingleton& ContentBrowserSingleton = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser").Get();
 
 	ContentBrowserSingleton.GetSelectedAssets(SelectedAssets);
-	auto TextureFact = NewObject<UScaleTextureFactory>();
-	TextureFact->ReImportSelected(scale, SelectedAssets);
-
-	return;
-
-
-	for (TArray<FAssetData>::TConstIterator it = SelectedAssets.CreateConstIterator(); it; it++)
+	TArray<FAssetData> SelectedTexAssets;
+	for (const FAssetData& ad : SelectedAssets)
 	{
-		//ExportBinary((*it).GetAsset());
+		if (ad.GetClass()->GetName().Equals(TEXT("Texture2D")))
+		{
+			SelectedTexAssets.Add(ad);
+		}
+	}
+
+	auto TextureFact = NewObject<UScaleTextureFactory>();
+	if (SelectedTexAssets.Num() > 0)
+	{
+		TextureFact->ReImportSelected(scale, SelectedTexAssets , MaxTexSize, bIsNotReallyModifyOriginalTex);
+	}
+	else
+	{
+		TextureFact->Import(scale, MaxTexSize , bIsNotReallyModifyOriginalTex);
 	}
 }
-
-
-
-
 
 
 #undef LOCTEXT_NAMESPACE

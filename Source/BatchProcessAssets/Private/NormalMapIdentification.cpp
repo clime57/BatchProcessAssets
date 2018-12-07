@@ -434,10 +434,10 @@ public:
 			{
 				// Must wait until the texture is done with previous operations before
 				// changing settings and getting it to rebuild.
-				if ( Texture2D->PendingMipChangeRequestStatus.GetValue() != TexState_ReadyFor_Requests )
-				{
-					Texture2D->WaitForStreaming();
-				}
+				//if ( Texture2D->PendingMipChangeRequestStatus.GetValue() != TexState_ReadyFor_Requests )
+				//{
+				//	Texture2D->WaitForStreaming();
+				//}@clime
 
 				{
 					Texture2D->SetFlags(RF_Transactional);

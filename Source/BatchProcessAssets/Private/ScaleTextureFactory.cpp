@@ -4,17 +4,29 @@
 #include "AssetRegistryModule.h"
 #include "MaterialExpressionTextureSample.h"
 #include "NormalMapIdentification.h"
+#include "IContentBrowserSingleton.h"
+#include "EngineAnalytics.h"
+#include "AnalyticsEventAttribute.h"
+#include "IAnalyticsProvider.h"
 
+#define LOCTEXT_NAMESPACE "ScaleTextureFactory"
+
+DECLARE_LOG_CATEGORY_EXTERN(LogScaleTextureFactory, Log, All);
+DEFINE_LOG_CATEGORY(LogScaleTextureFactory);
+
+#define MinTexSize 32
 UTexture* UScaleTextureFactory::ImportTexture1(UTexture* OldTexture,
 	const TArray<uint8>* RawPNG,
 	ETextureSourceFormat TextureFormat,
 	UClass* Class,
 	UObject* InParent,
-	FName Name)
+	FName Name,
+	const FIntPoint& FinalSize)
 {
 	EObjectFlags Flags = RF_Dynamic;
-	const int32 NewWidth = (int32)(OldTexture->Source.GetSizeX()*TexScale);
-	const int32 NewHeight = (int32)(OldTexture->Source.GetSizeY()*TexScale);
+	
+	const int32 NewWidth = (int32)FinalSize.X;
+	const int32 NewHeight = (int32)FinalSize.Y;
 	UTexture2D* Texture = CreateTexture2D(InParent, Name, Flags);
 	if (Texture)
 	{
@@ -44,13 +56,14 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 	FName				Name,
 	EObjectFlags		Flags,
 	UObject*			Context
-	)
+)
 {
 
 	TCHAR*		Type = TEXT("TGA");
-	FEditorDelegates::OnAssetPreImport.Broadcast(this, Class, InParent, Name, Type);//Type?以后要补上
+	if (!bIsNotReallyModifyOriginalTex)
+		FEditorDelegates::OnAssetPreImport.Broadcast(this, Class, InParent, Name, Type);//Type?以后要补上
 
-	// if the texture already exists, remember the user settings
+		// if the texture already exists, remember the user settings
 	UTexture* ExistingTexture = FindObject<UTexture>(InParent, *Name.ToString());
 	UTexture2D* ExistingTexture2D = FindObject<UTexture2D>(InParent, *Name.ToString());
 	if (!(ExistingTexture && ExistingTexture2D))
@@ -58,6 +71,43 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 		return nullptr;
 	}
 
+
+	const int32 MinMyTexSize = FMath::Min<int32>(ExistingTexture->Source.GetSizeX(), ExistingTexture->Source.GetSizeY());
+	//int32 MaxTextureSize = (int32)(FMath::Max<int32>(ExistingTexture->Source.GetSizeX(), ExistingTexture->Source.GetSizeY()) * TexScale);
+	int32 MaxTextureSize = iMaxTexSize;
+
+
+	if (MaxTextureSize <= MinTexSize && MinMyTexSize > MaxTextureSize)
+	{
+		MaxTextureSize = MinTexSize;
+	}
+
+	if (bIsNotReallyModifyOriginalTex)
+	{
+		if (/*(ExistingTexture->MaxTextureSize && (ExistingTexture->MaxTextureSize <= MaxTextureSize || ExistingTexture->MaxTextureSize <= MinTexSize))
+			|| */MinMyTexSize <= MinTexSize)
+		{
+			return nullptr;
+		}
+
+		if (MaxTextureSize <= 0)
+		{
+			MaxTextureSize = 0;
+		}
+		else
+		{
+			MaxTextureSize = FMath::Min<int32>(FMath::RoundUpToPowerOfTwo(MaxTextureSize), ExistingTexture->GetMaximumDimension());
+		}
+		ExistingTexture->MaxTextureSize = MaxTextureSize;
+		ExistingTexture->UpdateResource();
+
+		return ExistingTexture;
+	}
+
+
+
+
+	//////////////////////////////////////////////////////////////////////////////////////////////
 	TGuardValue<UTexture*> OriginalTexGuardValue(pOriginalTex, ExistingTexture);
 	#if WITH_EDITORONLY_DATA
 	ETextureSourceFormat Format = ExistingTexture->Source.GetFormat();
@@ -126,16 +176,18 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 		// Update with new settings, which should disable streaming...
 		ExistingTexture2D->UpdateResource();
 	}
+	FIntPoint FinalSize;
+	GetFinalSize(FIntPoint(ExistingTexture->Source.GetSizeX(), ExistingTexture->Source.GetSizeY()), FinalSize, MaxTextureSize);
 
 	TArray<uint8> RawPNG;
 	//float scale = 0.0625;
-	if (GetReImportData(ExistingTexture2D, &RawPNG) == nullptr) {
+	if (GetReImportData(ExistingTexture2D, &RawPNG, FinalSize) == nullptr) {
 		return nullptr;
 	}
 
 	FTextureReferenceReplacer RefReplacer(ExistingTexture);
 
-	UTexture* Texture = ImportTexture1(ExistingTexture, &RawPNG,Format, Class, InParent,Name);
+	UTexture* Texture = ImportTexture1(ExistingTexture, &RawPNG,Format, Class, InParent,Name, FinalSize);
 	//if (!Texture)
 	//{
 	//	if (ExistingTexture)
@@ -431,12 +483,13 @@ void SyncBrowserToAssets(const TArray<UObject*>& AssetsToSync)
 	ContentBrowserModule.Get().SyncBrowserToAssets(AssetsToSync, /*bAllowLockedBrowsers=*/true);
 }
 
-void UScaleTextureFactory::Import(float scale) {
-
-	TexScale = scale;
+void UScaleTextureFactory::Import(float scale, int32 MaxTexSize, bool IsNotReallyModifyOriginalTex) {
+	//TexScale = scale;
+	iMaxTexSize = MaxTexSize;
+	bIsNotReallyModifyOriginalTex = IsNotReallyModifyOriginalTex;
+	TArray<FAssetData> OutAssetDataList;
 	// Load the asset registry module
 	FAssetRegistryModule& AssetRegistryModule = FModuleManager::Get().LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
-	TArray<FAssetData> OutAssetDataList;
 	// Form a filter from the paths
 	FARFilter Filter;
 	Filter.bRecursivePaths = true;
@@ -444,17 +497,23 @@ void UScaleTextureFactory::Import(float scale) {
 	new (Filter.PackagePaths) FName("/Game");
 	// Query for a list of assets in the selected paths
 	AssetRegistryModule.Get().GetAssets(Filter, OutAssetDataList);
-	TArray<UObject*> ReturnObjects;
-	for (int32 i = 0; i < OutAssetDataList.Num(); ++i)
-	{
+	ImportADL(OutAssetDataList);
+}
 
-		UObject* Result = ReImport(OutAssetDataList[i]);
-		if (Result) 
+void UScaleTextureFactory::ImportADL(TArray<FAssetData>& SelectedAssets)
+{
+	TArray<UObject*> ReturnObjects;
+	FScopedSlowTask SlowTask(SelectedAssets.Num(), FText::FromString("Importing"));
+	SlowTask.MakeDialog();
+	for (int32 i = 0; i < SelectedAssets.Num(); ++i)
+	{
+		SlowTask.EnterProgressFrame(1, FText::Format(FText::FromString("ReImporting \"{0}\"..."), FText::FromName(SelectedAssets[i].PackagePath)));
+		UObject* Result = ReImport(SelectedAssets[i]);
+		if (Result)
 		{
 			ReturnObjects.Add(Result);
 		}
 	}
-	//SlowTask.EnterProgressFrame(1);
 	// Sync content browser to the newly created assets
 	if (ReturnObjects.Num())
 	{
@@ -464,14 +523,28 @@ void UScaleTextureFactory::Import(float scale) {
 
 
 
-
-
 UObject* UScaleTextureFactory::ReImport(FAssetData& AssetData)
 {
+	FName Key("Dimensions");
+	FString StrLeft;
+	FString StrRight;
+	AssetData.TagsAndValues.Find(Key)->Split("x",&StrLeft,&StrRight);
+
+	//UE_LOG(LogScaleTextureFactory, Log, TEXT("left = %s right = %s"), *StrLeft, *StrRight);
+
+	int32 TexWidth = FCString::Atoi(*StrLeft);
+	int32 TexHight = FCString::Atoi(*StrRight);
+	int32 MaxSize = FMath::Max<int32>(TexWidth, TexHight);
+	if (MaxSize <= MinTexSize)
+	{
+		return nullptr;
+	}
+
 	UClass* ImportAssetType = UTexture::StaticClass();
 	FString PackageName = AssetData.PackageName.ToString();
 	bool bImportWasCancelled = false;
 	UPackage* Pkg = CreatePackage(nullptr, *PackageName);//PackageNameΪ/Game/xxx.png
+
 	Pkg->FullyLoad();//如果不加载，会查找不到
 	UObject* Result = ImportObject1(ImportAssetType, Pkg, AssetData.AssetName, RF_Public | RF_Standalone, nullptr, bImportWasCancelled);
 	FString FileExtension = TEXT("tga");
@@ -483,6 +556,9 @@ UObject* UScaleTextureFactory::ReImport(FAssetData& AssetData)
 		FAssetRegistryModule::AssetCreated(Result);
 		GEditor->BroadcastObjectReimported(Result);
 		bImportSucceeded = true;
+
+		ImportAssetType = ResolveSupportedClass();
+		OnNewImportRecord(ImportAssetType, FileExtension, bImportSucceeded, bImportWasCancelled, FDateTime::UtcNow());
 	}
 	else
 	{
@@ -491,8 +567,8 @@ UObject* UScaleTextureFactory::ReImport(FAssetData& AssetData)
 		//UE_LOG(BatchProcessAssetsLog, Warning, TEXT("%s"), *Message.ToString());
 	}
 	// Refresh the supported class.  Some factories (e.g. FBX) only resolve their type after reading the file
-	ImportAssetType = ResolveSupportedClass();
-	OnNewImportRecord(ImportAssetType, FileExtension, bImportSucceeded, bImportWasCancelled, FDateTime::UtcNow());
+	//ImportAssetType = ResolveSupportedClass();//Clime move to above
+	//OnNewImportRecord(ImportAssetType, FileExtension, bImportSucceeded, bImportWasCancelled, FDateTime::UtcNow());
 	return Result;
 }
 
@@ -513,26 +589,80 @@ void UScaleTextureFactory::OnNewImportRecord(UClass* AssetType, const FString& F
 	}
 }
 
-TArray<uint8>* UScaleTextureFactory::GetReImportData(UTexture2D* Texture, TArray<uint8>* RawDataOut) {
+void UScaleTextureFactory::GetFinalSize(const FIntPoint& oldSize, FIntPoint& OutNewSize, int32 MaxTextureSize)
+{
+	int32 OriginalWidth = oldSize.X;
+	int32 OriginalHeight = oldSize.Y;
+	//int32 newWidth = (int32)(oldSize.X * TexScale);
+	//int32 newHeight = (int32)(oldSize.Y * TexScale);
+
+	int32 newWidth = 0;
+	int32 newHeight = 0;
+
+	//if (newWidth > MaxTextureSize)
+	//{
+	//	newWidth = MaxTextureSize;
+	//	newHeight = (float)OriginalHeight / OriginalWidth * newWidth;
+	//}
+
+	if (OriginalWidth == OriginalHeight)
+	{
+		if (newWidth < MaxTextureSize)
+			newWidth = newHeight = MaxTextureSize;
+	}
+	else if (OriginalWidth > OriginalHeight)
+	{
+		if (newWidth < MaxTextureSize)
+		{
+			newWidth = MaxTextureSize;
+			newHeight = (float)OriginalHeight / OriginalWidth * newWidth;
+		}
+	}
+	else
+	{
+		if (newHeight < MaxTextureSize)
+		{
+			newHeight = MaxTextureSize;
+			newWidth = (float)OriginalWidth / OriginalHeight * newHeight;
+		}
+	}
+
+	//if (newHeight > MaxTextureSize)
+	//{
+	//	newHeight = MaxTextureSize;
+	//	newWidth = (float)OriginalWidth / OriginalHeight * newHeight;
+	//}
+	OutNewSize.X = newWidth;
+	OutNewSize.Y = newHeight;
+}
+
+TArray<uint8>* UScaleTextureFactory::GetReImportData(UTexture2D* Texture, TArray<uint8>* RawDataOut, const FIntPoint& FinalSize) {
 	const bool bIsRGBA16 = Texture->Source.GetFormat() == TSF_RGBA16;
 	const int32 BytesPerPixel = bIsRGBA16 ? 8 : 4;
 	TArray<uint8> RawData;
 	Texture->Source.GetMipData(RawData, 0);
 	const int32 OriginalWidth = Texture->Source.GetSizeX();
 	const int32 OriginalHeight = Texture->Source.GetSizeY();
-	int32 newWidth = (int32)(OriginalWidth * TexScale);
-	int32 newHeight = (int32)(OriginalHeight * TexScale);
 
+
+	float TexScaleW = 0;
+	float TexScaleH = 0;
+
+	int32 newWidth = FinalSize.X;
+	int32 newHeight = FinalSize.Y;
+
+	TexScaleW = (float)newWidth / OriginalWidth;
+	TexScaleH = (float)newHeight / OriginalHeight;
+	
 	for (int32 j = 0; j < newHeight; j++)
 	{
 		for (int32 i = 0; i < newWidth; i++)
 		{
 			for (int32 byteIndex = 0; byteIndex < BytesPerPixel; byteIndex++)
 			{
-				int32 index = ((int32)(j / TexScale) * OriginalWidth + (int32)(i / TexScale)) * BytesPerPixel + byteIndex;
+				int32 index = ((int32)(j / TexScaleH) * OriginalWidth + (int32)(i / TexScaleW)) * BytesPerPixel + byteIndex;
 				if (index > RawData.Num() - 1) {
-					//UE_LOG(BatchProcessAssetsLog, Error, TEXT("invalid num %d"),&index);
-					int32 recordIndex = index;
+					UE_LOG(LogScaleTextureFactory, Error, TEXT("invalid num %d"),&index);
 					return nullptr;
 				}
 				uint8 data = RawData[index];
@@ -576,32 +706,10 @@ UTextureCube* UScaleTextureFactory::CreateTextureCube(UObject* InParent, FName N
 	}
 }
 
-void UScaleTextureFactory::ReImportSelected(float scale,TArray<FAssetData>& SelectedAssets) {
-	TexScale = scale;
-	// Load the asset registry module
-	FAssetRegistryModule& AssetRegistryModule = FModuleManager::Get().LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
-	//TArray<FAssetData> OutAssetDataList;
-	// Form a filter from the paths
-	FARFilter Filter;
-	Filter.bRecursivePaths = true;
-	new (Filter.ClassNames) FName("Texture2D");
-	new (Filter.PackagePaths) FName("/Game");
-	// Query for a list of assets in the selected paths
-	//AssetRegistryModule.Get().GetAssets(Filter, OutAssetDataList);
-	TArray<UObject*> ReturnObjects;
-	for (int32 i = 0; i < SelectedAssets.Num(); ++i)
-	{
-
-		UObject* Result = ReImport(SelectedAssets[i]);
-		if (Result)
-		{
-			ReturnObjects.Add(Result);
-		}
-	}
-	//SlowTask.EnterProgressFrame(1);
-	// Sync content browser to the newly created assets
-	if (ReturnObjects.Num())
-	{
-		SyncBrowserToAssets(ReturnObjects);
-	}
+void UScaleTextureFactory::ReImportSelected(float scale,TArray<FAssetData>& SelectedAssets, int32 MaxTexSize, bool IsNotReallyModifyOriginalTex) {
+	//TexScale = scale;
+	iMaxTexSize = MaxTexSize;
+	bIsNotReallyModifyOriginalTex = IsNotReallyModifyOriginalTex;
+	ImportADL(SelectedAssets);
 }
+#undef LOCTEXT_NAMESPACE
