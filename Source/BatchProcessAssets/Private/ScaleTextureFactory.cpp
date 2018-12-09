@@ -8,6 +8,10 @@
 #include "EngineAnalytics.h"
 #include "AnalyticsEventAttribute.h"
 #include "IAnalyticsProvider.h"
+#if ENGINE_MINOR_VERSION >= 21
+#include "Engine/VolumeTexture.h"
+#endif
+
 
 #define LOCTEXT_NAMESPACE "ScaleTextureFactory"
 
@@ -37,7 +41,7 @@ UTexture* UScaleTextureFactory::ImportTexture1(UTexture* OldTexture,
 			/*NumMips=*/ 1,
 			TextureFormat
 			);
-		Texture->SRGB = true;
+		Texture->SRGB = true;//这里应该不需要设置了
 		{
 			uint8* MipData = Texture->Source.LockMip(0);
 			FMemory::Memcpy(MipData, RawPNG->GetData(), RawPNG->Num());
@@ -60,17 +64,17 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 {
 
 	TCHAR*		Type = TEXT("TGA");
+
 	if (!bIsNotReallyModifyOriginalTex)
 		FEditorDelegates::OnAssetPreImport.Broadcast(this, Class, InParent, Name, Type);//Type?以后要补上
 
-		// if the texture already exists, remember the user settings
+	// if the texture already exists, remember the user settings
 	UTexture* ExistingTexture = FindObject<UTexture>(InParent, *Name.ToString());
 	UTexture2D* ExistingTexture2D = FindObject<UTexture2D>(InParent, *Name.ToString());
 	if (!(ExistingTexture && ExistingTexture2D))
 	{
 		return nullptr;
 	}
-
 
 	const int32 MinMyTexSize = FMath::Min<int32>(ExistingTexture->Source.GetSizeX(), ExistingTexture->Source.GetSizeY());
 	//int32 MaxTextureSize = (int32)(FMath::Max<int32>(ExistingTexture->Source.GetSizeX(), ExistingTexture->Source.GetSizeY()) * TexScale);
@@ -104,10 +108,6 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 		return ExistingTexture;
 	}
 
-
-
-
-	//////////////////////////////////////////////////////////////////////////////////////////////
 	TGuardValue<UTexture*> OriginalTexGuardValue(pOriginalTex, ExistingTexture);
 	#if WITH_EDITORONLY_DATA
 	ETextureSourceFormat Format = ExistingTexture->Source.GetFormat();
@@ -135,6 +135,7 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 	float								ExistingAdjustHue = 0.0f;
 	float								ExistingAdjustMinAlpha = 0.0f;
 	float								ExistingAdjustMaxAlpha = 1.0f;
+	FVector4							ExistingAlphaCoverageThresholds = FVector4(0, 0, 0, 0);
 	TextureMipGenSettings				ExistingMipGenSettings = TextureMipGenSettings(0);
 
 	bUsingExistingSettings = true;
@@ -160,6 +161,7 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 		ExistingDeferCompression = ExistingTexture->DeferCompression;
 		ExistingFlipGreenChannel = ExistingTexture->bFlipGreenChannel;
 		ExistingDitherMipMapAlpha = ExistingTexture->bDitherMipMapAlpha;
+		ExistingAlphaCoverageThresholds = ExistingTexture->AlphaCoverageThresholds;
 		ExistingAdjustBrightness = ExistingTexture->AdjustBrightness;
 		ExistingAdjustBrightnessCurve = ExistingTexture->AdjustBrightnessCurve;
 		ExistingAdjustVibrance = ExistingTexture->AdjustVibrance;
@@ -180,7 +182,7 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 	GetFinalSize(FIntPoint(ExistingTexture->Source.GetSizeX(), ExistingTexture->Source.GetSizeY()), FinalSize, MaxTextureSize);
 
 	TArray<uint8> RawPNG;
-	//float scale = 0.0625;
+
 	if (GetReImportData(ExistingTexture2D, &RawPNG, FinalSize) == nullptr) {
 		return nullptr;
 	}
@@ -188,18 +190,6 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 	FTextureReferenceReplacer RefReplacer(ExistingTexture);
 
 	UTexture* Texture = ImportTexture1(ExistingTexture, &RawPNG,Format, Class, InParent,Name, FinalSize);
-	//if (!Texture)
-	//{
-	//	if (ExistingTexture)
-	//	{
-	//		// We failed to import over the existing texture. Make sure the resource is ready in the existing texture.
-	//		ExistingTexture->UpdateResource();
-	//	}
-
-	//	//Warn->Logf(ELogVerbosity::Error, TEXT("Texture import failed"));
-	//	FEditorDelegates::OnAssetPostImport.Broadcast(this, nullptr);
-	//	return nullptr;
-	//}
 
 	//Replace the reference for the new texture with the existing one so that all current users still have valid references.
 	RefReplacer.Replace(Texture);
@@ -235,10 +225,10 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 		}
 	}
 
-	//if (!FCString::Stricmp(Type, TEXT("ies")))
-	//{
-	//	LODGroup = TEXTUREGROUP_IESLightProfile;
-	//}
+	if (!FCString::Stricmp(Type, TEXT("ies")))
+	{
+		LODGroup = TEXTUREGROUP_IESLightProfile;
+	}
 
 	Texture->LODGroup = LODGroup;
 
@@ -254,6 +244,7 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 	Texture->CompressionNoAlpha = NoAlpha;
 	Texture->DeferCompression = bDeferCompression;
 	Texture->bDitherMipMapAlpha = bDitherMipMapAlpha;
+	Texture->AlphaCoverageThresholds = AlphaCoverageThresholds;
 
 	if (Texture->MipGenSettings == TMGS_FromTextureGroup)
 	{
@@ -262,9 +253,11 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 	}
 
 	Texture->bPreserveBorder = bPreserveBorder;
-
+#if ENGINE_MINOR_VERSION <= 20
 	Texture->AssetImportData->Update(CurrentFilename);
-
+#else
+	Texture->AssetImportData->Update(CurrentFilename, FileHash.IsValid() ? &FileHash : nullptr);
+#endif
 	UTexture2D* Texture2D = Cast<UTexture2D>(Texture);
 
 	// Restore user set options
@@ -288,6 +281,7 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 		Texture->CompressionNoAlpha = ExistingNoAlpha;
 		Texture->DeferCompression = ExistingDeferCompression;
 		Texture->bDitherMipMapAlpha = ExistingDitherMipMapAlpha;
+		Texture->AlphaCoverageThresholds = ExistingAlphaCoverageThresholds;
 		Texture->bFlipGreenChannel = ExistingFlipGreenChannel;
 		Texture->AdjustBrightness = ExistingAdjustBrightness;
 		Texture->AdjustBrightnessCurve = ExistingAdjustBrightnessCurve;
@@ -313,134 +307,29 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 	}
 
 	// Automatically detect if the texture is a normal map and configure its properties accordingly
-	NormalMapIdentification::HandleAssetPostImport(this, Texture);//法线图导入判断，之后加上
+	NormalMapIdentification::HandleAssetPostImport(this, Texture);
 
 	FEditorDelegates::OnAssetPostImport.Broadcast(this, Texture);
 
 	// Invalidate any materials using the newly imported texture. (occurs if you import over an existing texture)
 	Texture->PostEditChange();
-	FFeedbackContext* Warn = nullptr;//之后修复
-	 //If we are automatically creating a material for this texture...
-	if (bCreateMaterial)
+
+#if ENGINE_MINOR_VERSION >= 21
+	// Invalidate any volume texture that was built on this texture.
+	if (Texture2D)
 	{
-		// Create the package for the material
-		const FString MaterialName = FString::Printf(TEXT("%s_Mat"), *Name.ToString());
-		const FString MaterialPackageName = FPackageName::GetLongPackagePath(InParent->GetName()) + TEXT("/") + MaterialName;
-		UPackage* MaterialPackage = CreatePackage(nullptr, *MaterialPackageName);
-
-		// Create the material
-		UMaterialFactoryNew* Factory = NewObject<UMaterialFactoryNew>();
-		UMaterial* Material = (UMaterial*)Factory->FactoryCreateNew(UMaterial::StaticClass(), MaterialPackage, *MaterialName, Flags, Context, Warn);
-
-		// Notify the asset registry
-		FAssetRegistryModule::AssetCreated(Material);
-
-		// Create a texture reference for the texture we just imported and hook it up to the diffuse channel
-		UMaterialExpression* Expression = NewObject<UMaterialExpression>(Material, UMaterialExpressionTextureSample::StaticClass());
-		Material->Expressions.Add(Expression);
-		TArray<FExpressionOutput> Outputs;
-
-		// If the user hasn't turned on any of the link checkboxes, default "bRGBToBaseColor" to being on.
-		if (!bRGBToBaseColor && !bRGBToEmissive && !bAlphaToRoughness && !bAlphaToEmissive && !bAlphaToOpacity && !bAlphaToOpacityMask)
+		for (TObjectIterator<UVolumeTexture> It; It; ++It)
 		{
-			bRGBToBaseColor = 1;
+			UVolumeTexture* VolumeTexture = *It;
+			if (VolumeTexture && VolumeTexture->Source2DTexture == Texture2D)
+			{
+				VolumeTexture->UpdateSourceFromSourceTexture();
+				VolumeTexture->UpdateResource();
+			}
 		}
-
-		// Set up the links the user asked for
-		if (bRGBToBaseColor)
-		{
-			Material->BaseColor.Expression = Expression;
-			((UMaterialExpressionTextureSample*)Material->BaseColor.Expression)->Texture = Texture;
-
-			Outputs = Material->BaseColor.Expression->GetOutputs();
-			FExpressionOutput* Output = Outputs.GetData();
-			Material->BaseColor.Mask = Output->Mask;
-			Material->BaseColor.MaskR = Output->MaskR;
-			Material->BaseColor.MaskG = Output->MaskG;
-			Material->BaseColor.MaskB = Output->MaskB;
-			Material->BaseColor.MaskA = Output->MaskA;
-		}
-
-		if (bRGBToEmissive)
-		{
-			Material->EmissiveColor.Expression = Expression;
-			((UMaterialExpressionTextureSample*)Material->EmissiveColor.Expression)->Texture = Texture;
-
-			Outputs = Material->EmissiveColor.Expression->GetOutputs();
-			FExpressionOutput* Output = Outputs.GetData();
-			Material->EmissiveColor.Mask = Output->Mask;
-			Material->EmissiveColor.MaskR = Output->MaskR;
-			Material->EmissiveColor.MaskG = Output->MaskG;
-			Material->EmissiveColor.MaskB = Output->MaskB;
-			Material->EmissiveColor.MaskA = Output->MaskA;
-		}
-
-		if (bAlphaToRoughness)
-		{
-			Material->Roughness.Expression = Expression;
-			((UMaterialExpressionTextureSample*)Material->Roughness.Expression)->Texture = Texture;
-
-			Outputs = Material->Roughness.Expression->GetOutputs();
-			FExpressionOutput* Output = Outputs.GetData();
-			Material->Roughness.Mask = Output->Mask;
-			Material->Roughness.MaskR = 0;
-			Material->Roughness.MaskG = 0;
-			Material->Roughness.MaskB = 0;
-			Material->Roughness.MaskA = 1;
-		}
-
-		if (bAlphaToEmissive)
-		{
-			Material->EmissiveColor.Expression = Expression;
-			((UMaterialExpressionTextureSample*)Material->EmissiveColor.Expression)->Texture = Texture;
-
-			Outputs = Material->EmissiveColor.Expression->GetOutputs();
-			FExpressionOutput* Output = Outputs.GetData();
-			Material->EmissiveColor.Mask = Output->Mask;
-			Material->EmissiveColor.MaskR = 0;
-			Material->EmissiveColor.MaskG = 0;
-			Material->EmissiveColor.MaskB = 0;
-			Material->EmissiveColor.MaskA = 1;
-		}
-
-		if (bAlphaToOpacity)
-		{
-			Material->Opacity.Expression = Expression;
-			((UMaterialExpressionTextureSample*)Material->Opacity.Expression)->Texture = Texture;
-
-			Outputs = Material->Opacity.Expression->GetOutputs();
-			FExpressionOutput* Output = Outputs.GetData();
-			Material->Opacity.Mask = Output->Mask;
-			Material->Opacity.MaskR = 0;
-			Material->Opacity.MaskG = 0;
-			Material->Opacity.MaskB = 0;
-			Material->Opacity.MaskA = 1;
-		}
-
-		if (bAlphaToOpacityMask)
-		{
-			Material->OpacityMask.Expression = Expression;
-			((UMaterialExpressionTextureSample*)Material->OpacityMask.Expression)->Texture = Texture;
-
-			Outputs = Material->OpacityMask.Expression->GetOutputs();
-			FExpressionOutput* Output = Outputs.GetData();
-			Material->OpacityMask.Mask = Output->Mask;
-			Material->OpacityMask.MaskR = 0;
-			Material->OpacityMask.MaskG = 0;
-			Material->OpacityMask.MaskB = 0;
-			Material->OpacityMask.MaskA = 1;
-		}
-
-		Material->TwoSided = bTwoSided;
-		Material->BlendMode = Blending;
-		Material->SetShadingModel(ShadingModel);
-
-		Material->PostEditChange();
 	}
+#endif
 	return Texture;
-
-
-//return nullptr;
 }
 //
 //
@@ -593,17 +482,9 @@ void UScaleTextureFactory::GetFinalSize(const FIntPoint& oldSize, FIntPoint& Out
 {
 	int32 OriginalWidth = oldSize.X;
 	int32 OriginalHeight = oldSize.Y;
-	//int32 newWidth = (int32)(oldSize.X * TexScale);
-	//int32 newHeight = (int32)(oldSize.Y * TexScale);
 
 	int32 newWidth = 0;
 	int32 newHeight = 0;
-
-	//if (newWidth > MaxTextureSize)
-	//{
-	//	newWidth = MaxTextureSize;
-	//	newHeight = (float)OriginalHeight / OriginalWidth * newWidth;
-	//}
 
 	if (OriginalWidth == OriginalHeight)
 	{
@@ -627,11 +508,6 @@ void UScaleTextureFactory::GetFinalSize(const FIntPoint& oldSize, FIntPoint& Out
 		}
 	}
 
-	//if (newHeight > MaxTextureSize)
-	//{
-	//	newHeight = MaxTextureSize;
-	//	newWidth = (float)OriginalWidth / OriginalHeight * newHeight;
-	//}
 	OutNewSize.X = newWidth;
 	OutNewSize.Y = newHeight;
 }

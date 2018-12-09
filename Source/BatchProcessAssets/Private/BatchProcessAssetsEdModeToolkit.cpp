@@ -101,7 +101,7 @@ FBatchProcessAssetsEdModeToolkit::FBatchProcessAssetsEdModeToolkit()
 				[
 					SNew(STextBlock)
 					.Text(LOCTEXT("DoNotModifyOrigenalAssets", "DoNotModifyOrigenalAssets"))
-					.ToolTipText(LOCTEXT("DoNotModifyOrigenalAssetsToolTipText","Checked Steate means only modifying Maximum Texture Size Property of the Texture"))
+					.ToolTipText(LOCTEXT("DoNotModifyOrigenalAssetsToolTipText","Checked State means only modifying Maximum Texture Size Property of the Texture"))
 				]
 			]
 			+ SVerticalBox::Slot()
@@ -172,6 +172,7 @@ void FBatchProcessAssetsEdModeToolkit::ReImport(float scale)
 	}
 
 	auto TextureFact = NewObject<UScaleTextureFactory>();
+	//TextureFact->AddToRoot();
 	if (SelectedTexAssets.Num() > 0)
 	{
 		TextureFact->ReImportSelected(scale, SelectedTexAssets , MaxTexSize, bIsNotReallyModifyOriginalTex);
@@ -180,6 +181,7 @@ void FBatchProcessAssetsEdModeToolkit::ReImport(float scale)
 	{
 		TextureFact->Import(scale, MaxTexSize , bIsNotReallyModifyOriginalTex);
 	}
+	//TextureFact->RemoveFromRoot();
 }
 
 

@@ -15,6 +15,7 @@
 
 
 关于DoNotModifyOrigenalAssets选项
+
 默认不选中，表示会将原来的纹理大小修改到SelectMaxTextureSize纹理大小，当然如果原纹理本来就小于SelectMaxTextureSize则没有任何改变，第二次处理纹理时速度更快（如果SelectMaxTextureSize一样），因为不需要加载整个纹理到内存。
 
 选中后表示仅会改变原纹理的最大纹理设置（Maximum Texture Size）而不会改变将其实际大小，二次处理速度稍慢，好处是随时可以还原
