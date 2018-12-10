@@ -2,11 +2,8 @@
 
 #pragma once
 
-//#include "Factories/TextureFactory.h"
-
-#include "UnrealEd.h" 
-//#include "Editor.h"
-
+//#include "UnrealEd.h" 
+#include "Factories/TextureFactory.h"
 #include "ScaleTextureFactory.generated.h"
 /**
  * 
@@ -25,9 +22,9 @@ private:
 public:	
 	void Import(float scale, int32 MaxTexSize, bool IsNotReallyModifyOriginalTex);
 	void ReImportSelected(float scale, TArray<FAssetData>& SelectedAssets, int32 MaxTexSize, bool IsNotReallyModifyOriginalTex);
-	UObject* ImportObject1(UClass* InClass, UObject* InOuter, FName InName, EObjectFlags InFlags, const TCHAR* Parms, bool& OutCanceled);
-	UObject* FactoryCreateFile1(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, const TCHAR* Parms, bool& bOutOperationCanceled);
-	UObject* FactoryCreateBinary1
+	UObject* ReImportObject(UClass* InClass, UObject* InOuter, FName InName, EObjectFlags InFlags, const TCHAR* Parms, bool& OutCanceled);
+	UObject* FactoryReCreateFile(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, const TCHAR* Parms, bool& bOutOperationCanceled);
+	UObject* FactoryReCreateBinary
 		(
 			UClass*				Class,
 			UObject*			InParent,
@@ -35,7 +32,7 @@ public:
 			EObjectFlags		Flags,
 			UObject*			Context
 			);
-	UTexture* ImportTexture1(UTexture* OldTexture,
+	UTexture* ReImportTexture(UTexture* OldTexture,
 		const TArray<uint8>* RawPNG,
 		ETextureSourceFormat TextureFormat,
 		UClass* Class,

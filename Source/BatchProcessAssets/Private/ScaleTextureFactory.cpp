@@ -19,7 +19,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogScaleTextureFactory, Log, All);
 DEFINE_LOG_CATEGORY(LogScaleTextureFactory);
 
 #define MinTexSize 32
-UTexture* UScaleTextureFactory::ImportTexture1(UTexture* OldTexture,
+UTexture* UScaleTextureFactory::ReImportTexture(UTexture* OldTexture,
 	const TArray<uint8>* RawPNG,
 	ETextureSourceFormat TextureFormat,
 	UClass* Class,
@@ -41,7 +41,7 @@ UTexture* UScaleTextureFactory::ImportTexture1(UTexture* OldTexture,
 			/*NumMips=*/ 1,
 			TextureFormat
 			);
-		Texture->SRGB = true;//这里应该不需要设置了
+		//Texture->SRGB = true;//这里应该不需要设置了
 		{
 			uint8* MipData = Texture->Source.LockMip(0);
 			FMemory::Memcpy(MipData, RawPNG->GetData(), RawPNG->Num());
@@ -53,7 +53,7 @@ UTexture* UScaleTextureFactory::ImportTexture1(UTexture* OldTexture,
 }
 
 
-UObject* UScaleTextureFactory::FactoryCreateBinary1
+UObject* UScaleTextureFactory::FactoryReCreateBinary
 (
 	UClass*				Class,
 	UObject*			InParent,
@@ -62,11 +62,11 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 	UObject*			Context
 )
 {
-
-	TCHAR*		Type = TEXT("TGA");
-
 	if (!bIsNotReallyModifyOriginalTex)
-		FEditorDelegates::OnAssetPreImport.Broadcast(this, Class, InParent, Name, Type);//Type?以后要补上
+	{
+		TCHAR*		Type = TEXT("TGA");
+		FEditorDelegates::OnAssetPreImport.Broadcast(this, Class, InParent, Name, Type);//Type的意义并不是很大
+	}
 
 	// if the texture already exists, remember the user settings
 	UTexture* ExistingTexture = FindObject<UTexture>(InParent, *Name.ToString());
@@ -138,9 +138,8 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 	FVector4							ExistingAlphaCoverageThresholds = FVector4(0, 0, 0, 0);
 	TextureMipGenSettings				ExistingMipGenSettings = TextureMipGenSettings(0);
 
-	bUsingExistingSettings = true;
 
-	if (ExistingTexture && bUsingExistingSettings)
+	if (ExistingTexture)
 	{
 		// save settings
 		if (ExistingTexture2D)
@@ -189,56 +188,10 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 
 	FTextureReferenceReplacer RefReplacer(ExistingTexture);
 
-	UTexture* Texture = ImportTexture1(ExistingTexture, &RawPNG,Format, Class, InParent,Name, FinalSize);
+	UTexture* Texture = ReImportTexture(ExistingTexture, &RawPNG,Format, Class, InParent,Name, FinalSize);
 
 	//Replace the reference for the new texture with the existing one so that all current users still have valid references.
 	RefReplacer.Replace(Texture);
-
-	// Start with the value that the loader suggests.
-	CompressionSettings = Texture->CompressionSettings;
-
-	// Figure out whether we're using a normal map LOD group.
-	bool bIsNormalMapLODGroup = false;
-	if (LODGroup == TEXTUREGROUP_WorldNormalMap
-		|| LODGroup == TEXTUREGROUP_CharacterNormalMap
-		|| LODGroup == TEXTUREGROUP_VehicleNormalMap
-		|| LODGroup == TEXTUREGROUP_WeaponNormalMap)
-	{
-		// Change from default to normal map.
-		if (CompressionSettings == TC_Default)
-		{
-			CompressionSettings = TC_Normalmap;
-		}
-		bIsNormalMapLODGroup = true;
-	}
-
-	// Propagate options.
-	Texture->CompressionSettings = CompressionSettings;
-
-	// Packed normal map
-	if (Texture->IsNormalMap())
-	{
-		Texture->SRGB = 0;
-		if (!bIsNormalMapLODGroup)
-		{
-			LODGroup = TEXTUREGROUP_WorldNormalMap;
-		}
-	}
-
-	if (!FCString::Stricmp(Type, TEXT("ies")))
-	{
-		LODGroup = TEXTUREGROUP_IESLightProfile;
-	}
-
-	Texture->LODGroup = LODGroup;
-
-	// Revert the LODGroup to the default if it was forcibly set by the texture being a normal map.
-	// This handles the case where multiple textures are being imported consecutively and
-	// LODGroup unexpectedly changes because some textures were normal maps and others weren't.
-	if (LODGroup == TEXTUREGROUP_WorldNormalMap && !bIsNormalMapLODGroup)
-	{
-		LODGroup = TEXTUREGROUP_World;
-	}
 
 	Texture->CompressionNone = NoCompression;
 	Texture->CompressionNoAlpha = NoAlpha;
@@ -261,7 +214,7 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 	UTexture2D* Texture2D = Cast<UTexture2D>(Texture);
 
 	// Restore user set options
-	if (ExistingTexture && bUsingExistingSettings)
+	if (ExistingTexture)
 	{
 		if (Texture2D)
 		{
@@ -292,12 +245,6 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 		Texture->AdjustMinAlpha = ExistingAdjustMinAlpha;
 		Texture->AdjustMaxAlpha = ExistingAdjustMaxAlpha;
 		Texture->MipGenSettings = ExistingMipGenSettings;
-	}
-	else
-	{
-		Texture->bFlipGreenChannel = (bFlipNormalMapGreenChannel && Texture->IsNormalMap());
-		// save user option
-		GConfig->SetBool(TEXT("/Script/UnrealEd.EditorEngine"), TEXT("FlipNormalMapGreenChannel"), bFlipNormalMapGreenChannel, GEngineIni);
 	}
 
 	if (Texture2D)
@@ -333,16 +280,16 @@ UObject* UScaleTextureFactory::FactoryCreateBinary1
 }
 //
 //
-UObject* UScaleTextureFactory::FactoryCreateFile1(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, const TCHAR* Parms, bool& bOutOperationCanceled)
+UObject* UScaleTextureFactory::FactoryReCreateFile(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, const TCHAR* Parms, bool& bOutOperationCanceled)
 {
 	{
 		ParseParms(Parms);
-		return FactoryCreateBinary1(InClass, InParent, InName, Flags, nullptr);
+		return FactoryReCreateBinary(InClass, InParent, InName, Flags, nullptr);
 	}
 	return nullptr;
 }
 
-UObject* UScaleTextureFactory::ImportObject1(UClass* InClass, UObject* InOuter, FName InName, EObjectFlags InFlags, const TCHAR* Parms, bool& OutCanceled)
+UObject* UScaleTextureFactory::ReImportObject(UClass* InClass, UObject* InOuter, FName InName, EObjectFlags InFlags, const TCHAR* Parms, bool& OutCanceled)
 {
 	UObject* Result = nullptr;
 	{
@@ -351,7 +298,7 @@ UObject* UScaleTextureFactory::ImportObject1(UClass* InClass, UObject* InOuter, 
 		{
 			//UE_LOG(BatchProcessAssetsLog, Log, TEXT("FactoryCreateFile: %s with %s (%i %i %s)"), *InClass->GetName(), *GetClass()->GetName(), bCreateNew, bText, *Filename);
 
-			Result = FactoryCreateFile1(InClass, InOuter, InName, InFlags, Parms, OutCanceled);
+			Result = FactoryReCreateFile(InClass, InOuter, InName, InFlags, Parms, OutCanceled);
 		}
 	}
 
@@ -435,7 +382,7 @@ UObject* UScaleTextureFactory::ReImport(FAssetData& AssetData)
 	UPackage* Pkg = CreatePackage(nullptr, *PackageName);//PackageNameΪ/Game/xxx.png
 
 	Pkg->FullyLoad();//如果不加载，会查找不到
-	UObject* Result = ImportObject1(ImportAssetType, Pkg, AssetData.AssetName, RF_Public | RF_Standalone, nullptr, bImportWasCancelled);
+	UObject* Result = ReImportObject(ImportAssetType, Pkg, AssetData.AssetName, RF_Public | RF_Standalone, nullptr, bImportWasCancelled);
 	FString FileExtension = TEXT("tga");
 
 	bool bImportSucceeded = false;
