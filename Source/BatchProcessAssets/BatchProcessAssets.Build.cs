@@ -9,7 +9,7 @@ public class BatchProcessAssets : ModuleRules
 		
 		PublicIncludePaths.AddRange(
 			new string[] {
-				"BatchProcessAssets/Public",
+				//"BatchProcessAssets/Public",
                 "Runtime/AssetRegistry/Public",
                 "Runtime/Engine/Classes/Materials",
 				// ... add public include paths required here ...
@@ -19,14 +19,14 @@ public class BatchProcessAssets : ModuleRules
 		
 		PrivateIncludePaths.AddRange(
 			new string[] {
-                "AssetTools",
+                //"AssetTools",
 				"BatchProcessAssets/Private",
-                "Editor/UnrealEd/Private",
-                "Editor/UnrealEd/Private/Settings",
-                "Editor/PackagesDialog/Public",
-                "Developer/DerivedDataCache/Public",
-                "Developer/TargetPlatform/Public",
-                "Developer/AssetTools/Private",
+                //"Editor/UnrealEd/Private",
+                //"Editor/UnrealEd/Private/Settings",
+                //"Editor/PackagesDialog/Public",
+                //"Developer/DerivedDataCache/Public",
+                //"Developer/TargetPlatform/Public",
+                //"Developer/AssetTools/Private",
 				// ... add other private include paths required here ...
 			}
 			);
