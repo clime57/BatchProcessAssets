@@ -254,7 +254,7 @@ UObject* UScaleTextureFactory::FactoryReCreateBinary
 	}
 
 	// Automatically detect if the texture is a normal map and configure its properties accordingly
-	NormalMapIdentification::HandleAssetPostImport(this, Texture);
+	//NormalMapIdentification::HandleAssetPostImport(this, Texture);
 
 	FEditorDelegates::OnAssetPostImport.Broadcast(this, Texture);
 
