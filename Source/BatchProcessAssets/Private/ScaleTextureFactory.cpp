@@ -41,7 +41,6 @@ UTexture* UScaleTextureFactory::ReImportTexture(UTexture* OldTexture,
 			/*NumMips=*/ 1,
 			TextureFormat
 			);
-		//Texture->SRGB = true;//这里应该不需要设置了
 		{
 			uint8* MipData = Texture->Source.LockMip(0);
 			FMemory::Memcpy(MipData, RawPNG->GetData(), RawPNG->Num());
@@ -312,53 +311,6 @@ UObject* UScaleTextureFactory::ReImportObject(UClass* InClass, UObject* InOuter,
 	return Result;
 }
 
-
-void SyncBrowserToAssets(const TArray<UObject*>& AssetsToSync)
-{
-	FContentBrowserModule& ContentBrowserModule = FModuleManager::Get().LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
-	ContentBrowserModule.Get().SyncBrowserToAssets(AssetsToSync, /*bAllowLockedBrowsers=*/true);
-}
-
-void UScaleTextureFactory::Import(float scale, int32 MaxTexSize, bool IsNotReallyModifyOriginalTex) {
-	//TexScale = scale;
-	iMaxTexSize = MaxTexSize;
-	bIsNotReallyModifyOriginalTex = IsNotReallyModifyOriginalTex;
-	TArray<FAssetData> OutAssetDataList;
-	// Load the asset registry module
-	FAssetRegistryModule& AssetRegistryModule = FModuleManager::Get().LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
-	// Form a filter from the paths
-	FARFilter Filter;
-	Filter.bRecursivePaths = true;
-	new (Filter.ClassNames) FName("Texture2D");
-	new (Filter.PackagePaths) FName("/Game");
-	// Query for a list of assets in the selected paths
-	AssetRegistryModule.Get().GetAssets(Filter, OutAssetDataList);
-	ImportADL(OutAssetDataList);
-}
-
-void UScaleTextureFactory::ImportADL(TArray<FAssetData>& SelectedAssets)
-{
-	TArray<UObject*> ReturnObjects;
-	FScopedSlowTask SlowTask(SelectedAssets.Num(), FText::FromString("Importing"));
-	SlowTask.MakeDialog();
-	for (int32 i = 0; i < SelectedAssets.Num(); ++i)
-	{
-		SlowTask.EnterProgressFrame(1, FText::Format(FText::FromString("ReImporting \"{0}\"..."), FText::FromName(SelectedAssets[i].PackagePath)));
-		UObject* Result = ReImport(SelectedAssets[i]);
-		if (Result)
-		{
-			ReturnObjects.Add(Result);
-		}
-	}
-	// Sync content browser to the newly created assets
-	if (ReturnObjects.Num())
-	{
-		SyncBrowserToAssets(ReturnObjects);
-	}
-}
-
-
-
 UObject* UScaleTextureFactory::ReImport(FAssetData& AssetData)
 {
 	FName Key("Dimensions");
@@ -396,18 +348,15 @@ UObject* UScaleTextureFactory::ReImport(FAssetData& AssetData)
 		ImportAssetType = ResolveSupportedClass();
 		OnNewImportRecord(ImportAssetType, FileExtension, bImportSucceeded, bImportWasCancelled, FDateTime::UtcNow());
 	}
-	else
-	{
-		//const FText Message = FText::Format(LOCTEXT("ImportFailed_Generic", "Failed to import '{0}'. Failed to create asset '{1}'"), FText::FromString(Filename), FText::FromString(PackageName));
-		//FMessageDialog::Open(EAppMsgType::Ok, Message);
-		//UE_LOG(BatchProcessAssetsLog, Warning, TEXT("%s"), *Message.ToString());
-	}
-	// Refresh the supported class.  Some factories (e.g. FBX) only resolve their type after reading the file
-	//ImportAssetType = ResolveSupportedClass();//Clime move to above
-	//OnNewImportRecord(ImportAssetType, FileExtension, bImportSucceeded, bImportWasCancelled, FDateTime::UtcNow());
 	return Result;
 }
 
+
+void UScaleTextureFactory::SetImportParam(int32 MaxTexSize, bool IsNotReallyModifyOriginalTex)
+{
+	iMaxTexSize = MaxTexSize;
+	bIsNotReallyModifyOriginalTex = IsNotReallyModifyOriginalTex;
+}
 
 void UScaleTextureFactory::OnNewImportRecord(UClass* AssetType, const FString& FileExtension, bool bSucceeded, bool bWasCancelled, const FDateTime& StartTime)
 {
@@ -467,15 +416,11 @@ TArray<uint8>* UScaleTextureFactory::GetReImportData(UTexture2D* Texture, TArray
 	const int32 OriginalWidth = Texture->Source.GetSizeX();
 	const int32 OriginalHeight = Texture->Source.GetSizeY();
 
-
-	float TexScaleW = 0;
-	float TexScaleH = 0;
-
 	int32 newWidth = FinalSize.X;
 	int32 newHeight = FinalSize.Y;
 
-	TexScaleW = (float)newWidth / OriginalWidth;
-	TexScaleH = (float)newHeight / OriginalHeight;
+	float TexScaleW = (float)newWidth / OriginalWidth;
+	float TexScaleH = (float)newHeight / OriginalHeight;
 	
 	for (int32 j = 0; j < newHeight; j++)
 	{
@@ -527,12 +472,5 @@ UTextureCube* UScaleTextureFactory::CreateTextureCube(UObject* InParent, FName N
 	{
 		return Super::CreateTextureCube(InParent, Name, Flags);
 	}
-}
-
-void UScaleTextureFactory::ReImportSelected(float scale,TArray<FAssetData>& SelectedAssets, int32 MaxTexSize, bool IsNotReallyModifyOriginalTex) {
-	//TexScale = scale;
-	iMaxTexSize = MaxTexSize;
-	bIsNotReallyModifyOriginalTex = IsNotReallyModifyOriginalTex;
-	ImportADL(SelectedAssets);
 }
 #undef LOCTEXT_NAMESPACE

@@ -2,7 +2,6 @@
 
 #pragma once
 
-//#include "UnrealEd.h" 
 #include "Factories/TextureFactory.h"
 #include "ScaleTextureFactory.generated.h"
 /**
@@ -16,12 +15,9 @@ class UScaleTextureFactory : public UTextureFactory
 	UPROPERTY()
 	class UTexture* pOriginalTex;
 private:
-	//float TexScale;
 	int32 iMaxTexSize;
 	bool bIsNotReallyModifyOriginalTex;
 public:	
-	void Import(float scale, int32 MaxTexSize, bool IsNotReallyModifyOriginalTex);
-	void ReImportSelected(float scale, TArray<FAssetData>& SelectedAssets, int32 MaxTexSize, bool IsNotReallyModifyOriginalTex);
 	UObject* ReImportObject(UClass* InClass, UObject* InOuter, FName InName, EObjectFlags InFlags, const TCHAR* Parms, bool& OutCanceled);
 	UObject* FactoryReCreateFile(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, const TCHAR* Parms, bool& bOutOperationCanceled);
 	UObject* FactoryReCreateBinary
@@ -46,6 +42,6 @@ public:
 	virtual UTexture2D* CreateTexture2D(UObject* InParent, FName Name, EObjectFlags Flags) override;
 	virtual UTextureCube* CreateTextureCube(UObject* InParent, FName Name, EObjectFlags Flags) override;
 	//~ End UTextureFactory Interface
+	void SetImportParam(int32 MaxTexSize, bool IsNotReallyModifyOriginalTex);
 	UObject* ReImport(FAssetData& AssetData);
-	void ImportADL(TArray<FAssetData>& SelectedAssets);
 };

@@ -22,7 +22,13 @@ public:
 	virtual FText GetBaseToolkitName() const override;
 	virtual class FEdMode* GetEditorMode() const override;
 	virtual TSharedPtr<class SWidget> GetInlineContent() const override { return ToolkitWidget; }
-	static void ReImport(float scale);
+	static void ReImport();
+
+	static UObject* ReImport(FAssetData& AssetData);
+	static void ImportADL(TArray<FAssetData>& SelectedAssets);
+	static void Import();
+	static void SyncBrowserToAssets(const TArray<UObject*>& AssetsToSync);
+	static void ReImportSelected(TArray<FAssetData>& SelectedAssets);
 private:
 	TSharedPtr<SWidget> ToolkitWidget;
 	TArray< FComboItemType > Options;

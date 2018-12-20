@@ -7,6 +7,7 @@
 #include "ContentBrowserModule.h"
 #include "ScaleTextureFactory.h"
 #include "IContentBrowserSingleton.h"
+#include "AssetRegistryModule.h"
 
 #define LOCTEXT_NAMESPACE "FBatchProcessAssetsEdModeToolkit"
 
@@ -24,7 +25,7 @@ FBatchProcessAssetsEdModeToolkit::FBatchProcessAssetsEdModeToolkit()
 
 		static FReply OnButtonClick()
 		{
-			ReImport(1);
+			ReImport();
 			return FReply::Handled();
 		}
 		
@@ -156,7 +157,7 @@ class FEdMode* FBatchProcessAssetsEdModeToolkit::GetEditorMode() const
 }
 
 
-void FBatchProcessAssetsEdModeToolkit::ReImport(float scale)
+void FBatchProcessAssetsEdModeToolkit::ReImport()
 {
 	TArray<FAssetData> SelectedAssets;
 	IContentBrowserSingleton& ContentBrowserSingleton = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser").Get();
@@ -171,18 +172,61 @@ void FBatchProcessAssetsEdModeToolkit::ReImport(float scale)
 		}
 	}
 
-	auto TextureFact = NewObject<UScaleTextureFactory>();
-	//TextureFact->AddToRoot();
 	if (SelectedTexAssets.Num() > 0)
 	{
-		TextureFact->ReImportSelected(scale, SelectedTexAssets , MaxTexSize, bIsNotReallyModifyOriginalTex);
+		ReImportSelected(SelectedTexAssets);
 	}
 	else
 	{
-		TextureFact->Import(scale, MaxTexSize , bIsNotReallyModifyOriginalTex);
+		Import();
 	}
-	//TextureFact->RemoveFromRoot();
+
+
+
+}
+void FBatchProcessAssetsEdModeToolkit::Import() {
+	TArray<FAssetData> OutAssetDataList;
+	FAssetRegistryModule& AssetRegistryModule = FModuleManager::Get().LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
+
+	FARFilter Filter;
+	Filter.bRecursivePaths = true;
+	new (Filter.ClassNames) FName("Texture2D");
+	new (Filter.PackagePaths) FName("/Game");
+	AssetRegistryModule.Get().GetAssets(Filter, OutAssetDataList);
+	ImportADL(OutAssetDataList);
 }
 
+void FBatchProcessAssetsEdModeToolkit::SyncBrowserToAssets(const TArray<UObject*>& AssetsToSync)
+{
+	FContentBrowserModule& ContentBrowserModule = FModuleManager::Get().LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
+	ContentBrowserModule.Get().SyncBrowserToAssets(AssetsToSync, /*bAllowLockedBrowsers=*/true);
+}
+
+void FBatchProcessAssetsEdModeToolkit::ImportADL(TArray<FAssetData>& SelectedAssets)
+{
+	TArray<UObject*> ReturnObjects;
+	auto TextureFact = NewObject<UScaleTextureFactory>();
+	TextureFact->SetImportParam(MaxTexSize, bIsNotReallyModifyOriginalTex);
+	FScopedSlowTask SlowTask(SelectedAssets.Num(), FText::FromString("Importing"));
+	SlowTask.MakeDialog();
+	for (int32 i = 0; i < SelectedAssets.Num(); ++i)
+	{
+		SlowTask.EnterProgressFrame(1, FText::Format(FText::FromString("ReImporting \"{0}\"..."), FText::FromName(SelectedAssets[i].PackagePath)));
+		UObject* Result = TextureFact->ReImport(SelectedAssets[i]);
+		if (Result)
+		{
+			ReturnObjects.Add(Result);
+		}
+	}
+
+	if (ReturnObjects.Num())
+	{
+		SyncBrowserToAssets(ReturnObjects);
+	}
+}
+
+void FBatchProcessAssetsEdModeToolkit::ReImportSelected(TArray<FAssetData>& SelectedAssets) {
+	ImportADL(SelectedAssets);
+}
 
 #undef LOCTEXT_NAMESPACE
