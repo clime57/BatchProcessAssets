@@ -1,6 +1,6 @@
 // Copyright 1998-2016 Epic Games, Inc. All Rights Reserved.
 
-#include "BatchProcessAssetsPrivatePCH.h"
+#include "BatchProcessAssets.h"
 #include "BatchProcessAssetsEdMode.h"
 #include "BatchProcessAssetsEdModeToolkit.h"
 #include "Toolkits/ToolkitManager.h"

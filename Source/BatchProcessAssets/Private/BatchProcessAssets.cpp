@@ -1,10 +1,9 @@
 // Copyright 1998-2016 Epic Games, Inc. All Rights Reserved.
-
-#include "BatchProcessAssetsPrivatePCH.h"
+#include "BatchProcessAssets.h"
 #include "BatchProcessAssetsEdMode.h"
 
 #define LOCTEXT_NAMESPACE "FBatchProcessAssetsModule"
-
+DEFINE_LOG_CATEGORY(BatchProcessAssetsLog);
 void FBatchProcessAssetsModule::StartupModule()
 {
 	// This code will execute after your module is loaded into memory; the exact timing is specified in the .uplugin file per-module

@@ -6,8 +6,9 @@ public class BatchProcessAssets : ModuleRules
 {
 	public BatchProcessAssets(ReadOnlyTargetRules Target) : base(Target)
 	{
-		
-		PublicIncludePaths.AddRange(
+        bEnforceIWYU = false;
+        PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+        PublicIncludePaths.AddRange(
 			new string[] {
 				//"BatchProcessAssets/Public",
                 "Runtime/AssetRegistry/Public",

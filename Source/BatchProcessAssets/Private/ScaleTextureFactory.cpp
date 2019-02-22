@@ -1,9 +1,8 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
-#include "BatchProcessAssetsPrivatePCH.h"
+#include "BatchProcessAssets.h"
 #include "ScaleTextureFactory.h"
 #include "AssetRegistryModule.h"
 #include "MaterialExpressionTextureSample.h"
-#include "NormalMapIdentification.h"
 #include "IContentBrowserSingleton.h"
 #include "EngineAnalytics.h"
 #include "AnalyticsEventAttribute.h"
@@ -14,9 +13,6 @@
 
 
 #define LOCTEXT_NAMESPACE "ScaleTextureFactory"
-
-DECLARE_LOG_CATEGORY_EXTERN(LogScaleTextureFactory, Log, All);
-DEFINE_LOG_CATEGORY(LogScaleTextureFactory);
 
 #define MinTexSize 32
 UTexture* UScaleTextureFactory::ReImportTexture(UTexture* OldTexture,
@@ -318,7 +314,7 @@ UObject* UScaleTextureFactory::ReImport(FAssetData& AssetData)
 	FString StrRight;
 	AssetData.TagsAndValues.Find(Key)->Split("x",&StrLeft,&StrRight);
 
-	//UE_LOG(LogScaleTextureFactory, Log, TEXT("left = %s right = %s"), *StrLeft, *StrRight);
+	//UE_LOG(BatchProcessAssetsLog, Log, TEXT("left = %s right = %s"), *StrLeft, *StrRight);
 
 	int32 TexWidth = FCString::Atoi(*StrLeft);
 	int32 TexHight = FCString::Atoi(*StrRight);
@@ -430,7 +426,7 @@ TArray<uint8>* UScaleTextureFactory::GetReImportData(UTexture2D* Texture, TArray
 			{
 				int32 index = ((int32)(j / TexScaleH) * OriginalWidth + (int32)(i / TexScaleW)) * BytesPerPixel + byteIndex;
 				if (index > RawData.Num() - 1) {
-					UE_LOG(LogScaleTextureFactory, Error, TEXT("invalid num %d"),&index);
+					UE_LOG(BatchProcessAssetsLog, Error, TEXT("invalid num %d"),&index);
 					return nullptr;
 				}
 				uint8 data = RawData[index];

@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "CoreMinimal.h"
 #include "Factories/TextureFactory.h"
 #include "ScaleTextureFactory.generated.h"
 /**

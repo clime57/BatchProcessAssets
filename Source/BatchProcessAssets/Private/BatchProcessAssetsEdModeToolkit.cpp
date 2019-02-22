@@ -1,6 +1,6 @@
 // Copyright 1998-2016 Epic Games, Inc. All Rights Reserved.
 
-#include "BatchProcessAssetsPrivatePCH.h"
+#include "BatchProcessAssets.h"
 #include "BatchProcessAssetsEdMode.h"
 #include "BatchProcessAssetsEdModeToolkit.h"
 
@@ -8,6 +8,7 @@
 #include "ScaleTextureFactory.h"
 #include "IContentBrowserSingleton.h"
 #include "AssetRegistryModule.h"
+#include "FindUnreferencedAssets.h"
 
 #define LOCTEXT_NAMESPACE "FBatchProcessAssetsEdModeToolkit"
 
@@ -35,6 +36,20 @@ FBatchProcessAssetsEdModeToolkit::FBatchProcessAssetsEdModeToolkit()
 				.Text(InLabel)
 				.OnClicked_Static(&Locals::OnButtonClick);
 		}
+
+		static FReply OnFindUnreferencedAssetsButtonClick()
+		{
+			FindUnreferencedAssets();
+			return FReply::Handled();
+		}
+
+		static TSharedRef<SWidget> MakeFindUnreferencedAssetsButton(FText InLabel)
+		{
+			return SNew(SButton)
+				.Text(InLabel)
+				.OnClicked_Static(&Locals::OnFindUnreferencedAssetsButtonClick);
+		}
+
 	};
 
 	const float Factor = 256.0f;
@@ -111,6 +126,13 @@ FBatchProcessAssetsEdModeToolkit::FBatchProcessAssetsEdModeToolkit()
 				.Padding(10)
 				[
 					Locals::MakeButton(LOCTEXT("ScaleTexturesButtonLabel1", "ScaleTextures"))
+				]
+			+ SVerticalBox::Slot()
+				.HAlign(HAlign_Center)
+				.AutoHeight()
+				.Padding(20)
+				[
+					Locals::MakeFindUnreferencedAssetsButton(LOCTEXT("FindUnreferencedAssets", "FindUnreferencedAssets"))
 				]
 		];
 }
@@ -206,6 +228,7 @@ void FBatchProcessAssetsEdModeToolkit::ImportADL(TArray<FAssetData>& SelectedAss
 {
 	TArray<UObject*> ReturnObjects;
 	auto TextureFact = NewObject<UScaleTextureFactory>();
+	TextureFact->AddToRoot();
 	TextureFact->SetImportParam(MaxTexSize, bIsNotReallyModifyOriginalTex);
 	FScopedSlowTask SlowTask(SelectedAssets.Num(), FText::FromString("Importing"));
 	SlowTask.MakeDialog();
@@ -223,10 +246,19 @@ void FBatchProcessAssetsEdModeToolkit::ImportADL(TArray<FAssetData>& SelectedAss
 	{
 		SyncBrowserToAssets(ReturnObjects);
 	}
+	TextureFact->RemoveFromRoot();
 }
 
 void FBatchProcessAssetsEdModeToolkit::ReImportSelected(TArray<FAssetData>& SelectedAssets) {
 	ImportADL(SelectedAssets);
+}
+
+void FBatchProcessAssetsEdModeToolkit::FindUnreferencedAssets()
+{
+	UFindUnreferencedAssets* FindUnreferencedAssets = NewObject<UFindUnreferencedAssets>();
+	FindUnreferencedAssets->AddToRoot();
+	FindUnreferencedAssets->Find();
+	FindUnreferencedAssets->RemoveFromRoot();
 }
 
 #undef LOCTEXT_NAMESPACE

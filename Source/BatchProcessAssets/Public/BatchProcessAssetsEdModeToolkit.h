@@ -1,7 +1,7 @@
 // Copyright 1998-2016 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
-
+#include "CoreMinimal.h"
 #include "Editor/UnrealEd/Public/Toolkits/BaseToolkit.h"
 
 
@@ -29,6 +29,8 @@ public:
 	static void Import();
 	static void SyncBrowserToAssets(const TArray<UObject*>& AssetsToSync);
 	static void ReImportSelected(TArray<FAssetData>& SelectedAssets);
+
+	static void FindUnreferencedAssets();
 private:
 	TSharedPtr<SWidget> ToolkitWidget;
 	TArray< FComboItemType > Options;
